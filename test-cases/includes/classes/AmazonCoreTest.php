@@ -9,6 +9,8 @@ class AmazonCoreTest extends PHPUnit_Framework_TestCase {
      * @var AmazonServiceStatus
      */
     protected $object;
+    /** @var  AmazonMWSConfig */
+    protected $config;
 
     /**
      * Sets up the fixture, for example, opens a network connection.
@@ -16,6 +18,7 @@ class AmazonCoreTest extends PHPUnit_Framework_TestCase {
      */
     protected function setUp() {
         resetLog();
+        $this->config = new AmazonMWSConfig( __DIR__.'/../../test-config.php');
         $this->object = new AmazonServiceStatus('testStore', 'Inbound', true, null, __DIR__.'/../../test-config.php');
     }
 
@@ -75,11 +78,12 @@ class AmazonCoreTest extends PHPUnit_Framework_TestCase {
      * @covers AmazonCore::setLogPath
      */
     public function testSetLogPath() {
-        $fileName = 'no-file.log';
-
-        $this->object->setLogPath($fileName);
-
-        $this->assertFileExists($fileName);
+        if (PHP_OS == 'Windows') {
+            $this->object->setLogPath('C:\\BadFolder\\ReallyBadFolder\\BadLogFile.txt');
+        } else {
+            $this->object->setLogPath('/dev/no/file/exists');
+        }
+        $this->assertTrue($this->object->getConfig()->isLoggingDisabled());
     }
 
     /**
@@ -92,8 +96,21 @@ class AmazonCoreTest extends PHPUnit_Framework_TestCase {
     }
 
     /**
+     * @covers AmazonCore::setLogPath
+     */
+    public function testSetLogPathToFolder() {
+        if (PHP_OS == 'Windows') {
+            $this->object->setLogPath('C:\\Windows\\'); // !!
+        } else {
+            $this->object->setLogPath('/var/log/');
+        }
+        $this->assertTrue($this->object->getConfig()->isLoggingDisabled());
+    }
+
+    /**
+     * Updated to use the new config class instead.
+     *
      * @covers AmazonCore::setStore
-     * @todo   Implement testSetStore().
      */
     public function testSetStore() {
         $this->object->setStore('no');
@@ -102,6 +119,11 @@ class AmazonCoreTest extends PHPUnit_Framework_TestCase {
         $this->assertEquals('Store no does not exist!',$check[1]);
         resetLog();
         $this->object->setStore('bad');
+        $bad = parseLog();
+        $this->assertEquals('Store bad does not exist!',$bad[0]);
+        resetLog();
+        // Ok, now load the 'bad' store from the config.
+        $this->object->setConfig($this->config->getConfigFor('bad'));
         $bad = parseLog();
         $this->assertEquals('Merchant ID is missing!',$bad[0]);
         $this->assertEquals('Access Key ID is missing!',$bad[1]);
